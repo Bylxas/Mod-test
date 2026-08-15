@@ -75,9 +75,9 @@ if ($mcProcess) {
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
-# ── Konfiguration für die Fundort-Anzeige ──────────────────────────────
-# Wie viele Fundpfade pro Treffer maximal angezeigt werden, bevor
-# "+N weitere" zusammengefasst wird. Hält die Konsole übersichtlich.
+# ── Hit-location display configuration ─────────────────────────────────
+# How many hit paths are shown per match at most before the rest is
+# collapsed into "+N more". Keeps the console output readable.
 $script:MaxPathsShown = 2
 $script:MaxPathLength = 64
 
@@ -335,7 +335,7 @@ $fullwidthRegex = [regex]::new(
     [System.Text.RegularExpressions.RegexOptions]::Compiled
 )
 
-# ── Hilfsfunktion: Fund + Fundort in ein Dictionary<string,List[string]> eintragen ──
+# ── Helper: record a hit + its location in a Dictionary<string,List[string]> ──
 function Add-Hit {
     param(
         [System.Collections.Generic.Dictionary[string,System.Collections.Generic.List[string]]]$Dict,
@@ -353,7 +353,7 @@ function Add-Hit {
 function Invoke-ModScan {
     param([string]$FilePath)
 
-    # Werte sind jetzt Dictionaries: Fund-Text -> Liste der Fundpfade (JAR-intern)
+    # Values are now Dictionaries: matched text -> list of hit paths (inside the JAR)
     $foundPatterns     = [System.Collections.Generic.Dictionary[string,System.Collections.Generic.List[string]]]::new()
     $foundStrings      = [System.Collections.Generic.Dictionary[string,System.Collections.Generic.List[string]]]::new()
     $foundFullwidthRaw = [System.Collections.Generic.List[object]]::new()
@@ -383,7 +383,7 @@ function Invoke-ModScan {
             } catch { }
         }
 
-        # Pattern-Treffer im Datei-/Pfadnamen selbst (auch in verschachtelten JARs)
+        # Pattern hits in the file/path name itself (including nested JARs)
         foreach ($item in $allEntries) {
             foreach ($m in $patternRegex.Matches($item.Path)) {
                 Add-Hit $foundPatterns $m.Value $item.Path
@@ -447,7 +447,7 @@ function Invoke-ModScan {
         if ($key) { Add-Hit $resolvedFullwidth $key $item.Path }
     }
 
-    # Redundante (in einem längeren Treffer enthaltene) Fullwidth-Keys zusammenführen
+    # Merge redundant fullwidth keys (ones contained within a longer match)
     $keys = @($resolvedFullwidth.Keys)
     $finalFullwidth = [System.Collections.Generic.Dictionary[string,System.Collections.Generic.List[string]]]::new()
     foreach ($fw in $keys) {
@@ -833,7 +833,7 @@ function Write-SectionHeader {
     Write-Host ""
 }
 
-# Kompakte Zeile für einen Fund inkl. bis zu $script:MaxPathsShown Fundorten
+# Compact line for a single hit, including up to $script:MaxPathsShown locations
 function Write-HitLine {
     param(
         [string]$Label,
@@ -852,14 +852,14 @@ function Write-HitLine {
     if ($Paths.Count -gt $script:MaxPathsShown) {
         $rest = $Paths.Count - $script:MaxPathsShown
         Write-Host "  │       ↳ " -ForegroundColor DarkGray -NoNewline
-        Write-Host "... +$rest weitere Fundstelle(n)" -ForegroundColor DarkGray
+        Write-Host "... +$rest more location(s)" -ForegroundColor DarkGray
     }
 }
 
 function Write-SuspiciousCard {
     param($Mod)
 
-    # Gesamtzahl eindeutiger Fundorte für die Kopfzeile
+    # Total number of unique hit locations, for the header line
     $totalLocations = 0
     foreach ($k in $Mod.Patterns.Keys)  { $totalLocations += $Mod.Patterns[$k].Count }
     foreach ($k in $Mod.Strings.Keys)   { if (-not $Mod.Patterns.ContainsKey($k)) { $totalLocations += $Mod.Strings[$k].Count } }
@@ -872,7 +872,7 @@ function Write-SuspiciousCard {
     Write-Host " FLAGGED " -ForegroundColor White -BackgroundColor DarkRed -NoNewline
     Write-Host "  " -NoNewline
     Write-Host $Mod.FileName -ForegroundColor Yellow -NoNewline
-    Write-Host "  ($totalLocations Fundstelle(n))" -ForegroundColor DarkGray
+    Write-Host "  ($totalLocations location(s))" -ForegroundColor DarkGray
     Write-Host ("  │ " + ("─" * 66)) -ForegroundColor DarkRed
 
     if ($Mod.Patterns.Count -gt 0) {
