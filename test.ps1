@@ -127,7 +127,8 @@ $suspiciousPatterns = @(
 
 )
 
-$cheatStrings = @(    "AutoCrystal", "autocrystal", "auto crystal", "cw crystal", "JDWP.VirtualMachine.AllModules",
+$cheatStrings = @(
+    "AutoCrystal", "autocrystal", "auto crystal", "cw crystal", "JDWP.VirtualMachine.AllModules",
     "dontPlaceCrystal", "dontBreakCrystal", "AutoHitCrystal", "autohitcrystal",
     "canPlaceCrystalServer", "healPotSlot", "ＡｕｔｏＣｒｙｓｔａｌ", "Ａｕｔｏ Ｃｒｙｓｔａｌ", "ＡｕｔｏＨｉｔＣｒｙｓｔａｌ",
     "AutoAnchor", "autoanchor", "auto anchor", "DoubleAnchor", "HasAnchor", "anchortweaks",
@@ -267,6 +268,11 @@ $cheatStrings = @(    "AutoCrystal", "autocrystal", "auto crystal", "cw crystal"
 
 )
 
+$splitStringPatterns = @(
+    "Doomsday=var16.append('l');                var16.append('o');                var16.append('a');                var16.append('d');                var16.append(' ');                var16.append('D');                var16.append('o');                var16.append('o');                var16.append('m');                var16.append('s');                var16.append('D');                var16.append('a');                var16.append('y');"
+)
+
+
 $patternRegex = [regex]::new(
     '(?<![A-Za-z])(' + ($suspiciousPatterns -join '|') + ')(?![A-Za-z])',
     [System.Text.RegularExpressions.RegexOptions]::Compiled
@@ -274,67 +280,6 @@ $patternRegex = [regex]::new(
 
 $cheatStringSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
 foreach ($s in $cheatStrings) { [void]$cheatStringSet.Add($s) }
-
-$splitStringPatterns = @(
-    "doomsday=doomsdayargs=",
-    "liquidbounce=liquidbounce",
-    "meteor=meteorclient"
-)
-
-$splitStringMap = [ordered]@{}
-foreach ($entry in $splitStringPatterns) {
-    $parts = $entry.Split('=', 2)
-    if ($parts.Count -eq 2) {
-        $splitStringMap[$parts[0]] = $parts[1].Split('|')
-    }
-}
-
-$appendCallRegex = [regex]::new(
-    "(?<var>[A-Za-z_][A-Za-z0-9_]*)\.append\(\s*(?:'(?<ch>(?:[^'\\]|\\.))'|""(?<str>(?:[^""\\]|\\.)*)"")\s*\)\s*;",
-    [System.Text.RegularExpressions.RegexOptions]::Compiled
-)
-
-function Get-SplitStringDetections {
-    param([string]$Text)
-
-    $hits = [System.Collections.Generic.HashSet[string]]::new()
-    if ([string]::IsNullOrEmpty($Text)) { return $hits }
-
-    $matches = $appendCallRegex.Matches($Text)
-    if ($matches.Count -eq 0) { return $hits }
-
-    $currentVar = $null
-    $buffer = [System.Text.StringBuilder]::new()
-
-    $flush = {
-        if ($buffer.Length -gt 0) {
-            $reconstructed = $buffer.ToString()
-            foreach ($client in $splitStringMap.Keys) {
-                foreach ($needle in $splitStringMap[$client]) {
-                    if ($reconstructed.Contains($needle)) {
-                        [void]$hits.Add($client)
-                        break
-                    }
-                }
-            }
-        }
-        $buffer.Clear() | Out-Null
-    }
-
-    foreach ($m in $matches) {
-        $var = $m.Groups["var"].Value
-        $piece = if ($m.Groups["ch"].Success) { $m.Groups["ch"].Value } else { $m.Groups["str"].Value }
-
-        if ($currentVar -ne $null -and $var -ne $currentVar) {
-            & $flush
-        }
-        $currentVar = $var
-        [void]$buffer.Append($piece)
-    }
-    & $flush
-
-    return $hits
-}
 
 function Get-FileSHA1 {
     param([string]$Path)
@@ -415,7 +360,6 @@ function Invoke-ModScan {
     $foundPatterns     = [System.Collections.Generic.Dictionary[string,System.Collections.Generic.List[string]]]::new()
     $foundStrings      = [System.Collections.Generic.Dictionary[string,System.Collections.Generic.List[string]]]::new()
     $foundFullwidthRaw = [System.Collections.Generic.List[object]]::new()
-    $foundSplitStrings = [System.Collections.Generic.Dictionary[string,System.Collections.Generic.List[string]]]::new()
 
     try {
         $archive = [System.IO.Compression.ZipFile]::OpenRead($FilePath)
@@ -473,9 +417,6 @@ function Invoke-ModScan {
                     foreach ($m in $fullwidthRegex.Matches($utf8)) {
                         $foundFullwidthRaw.Add([PSCustomObject]@{ Value = $m.Value; Path = $name })
                     }
-
-                    foreach ($h in (Get-SplitStringDetections -Text $ascii)) { Add-Hit $foundSplitStrings $h $name }
-                    foreach ($h in (Get-SplitStringDetections -Text $utf8))  { Add-Hit $foundSplitStrings $h $name }
                 } catch { }
             }
         }
@@ -524,7 +465,7 @@ function Invoke-ModScan {
         }
     }
 
-    return @{ Patterns = $foundPatterns; Strings = $foundStrings; Fullwidth = $finalFullwidth; SplitStrings = $foundSplitStrings }
+    return @{ Patterns = $foundPatterns; Strings = $foundStrings; Fullwidth = $finalFullwidth }
 }
 
 function Invoke-ObfuscationScan {
@@ -928,9 +869,6 @@ function Write-SuspiciousCard {
     if ($Mod.Fullwidth) {
         foreach ($k in $Mod.Fullwidth.Keys) { $totalLocations += $Mod.Fullwidth[$k].Count }
     }
-    if ($Mod.SplitStrings) {
-        foreach ($k in $Mod.SplitStrings.Keys) { $totalLocations += $Mod.SplitStrings[$k].Count }
-    }
 
     Write-Host ("  " + ("─" * 70)) -ForegroundColor DarkRed
     Write-Host "  │ " -ForegroundColor DarkRed -NoNewline
@@ -965,15 +903,6 @@ function Write-SuspiciousCard {
         Write-Host "FULLWIDTH UNICODE" -ForegroundColor DarkGray
         foreach ($key in ($Mod.Fullwidth.Keys | Sort-Object)) {
             Write-HitLine -Label "FULLWIDTH: $key" -Paths $Mod.Fullwidth[$key] -LabelColor Cyan -BarColor DarkRed
-        }
-    }
-
-    if ($Mod.SplitStrings -and $Mod.SplitStrings.Count -gt 0) {
-        Write-Host "  │" -ForegroundColor DarkRed
-        Write-Host "  │  " -ForegroundColor DarkRed -NoNewline
-        Write-Host "SPLIT-STRING" -ForegroundColor DarkGray
-        foreach ($key in ($Mod.SplitStrings.Keys | Sort-Object)) {
-            Write-HitLine -Label "CLIENT: $key" -Paths $Mod.SplitStrings[$key] -LabelColor Cyan -BarColor DarkRed
         }
     }
 
@@ -1141,13 +1070,12 @@ foreach ($jar in $jarFiles) {
 
     $result = Invoke-ModScan -FilePath $jar.FullName
 
-    if ($result.Patterns.Count -gt 0 -or $result.Strings.Count -gt 0 -or $result.Fullwidth.Count -gt 0 -or $result.SplitStrings.Count -gt 0) {
+    if ($result.Patterns.Count -gt 0 -or $result.Strings.Count -gt 0 -or $result.Fullwidth.Count -gt 0) {
         $suspiciousMods += [PSCustomObject]@{
-            FileName     = $jar.Name
-            Patterns     = $result.Patterns
-            Strings      = $result.Strings
-            Fullwidth    = $result.Fullwidth
-            SplitStrings = $result.SplitStrings
+            FileName  = $jar.Name
+            Patterns  = $result.Patterns
+            Strings   = $result.Strings
+            Fullwidth = $result.Fullwidth
         }
         $verifiedMods = $verifiedMods | Where-Object { $_.FileName -ne $jar.Name }
     }
