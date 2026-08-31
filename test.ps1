@@ -274,18 +274,19 @@ $codeSignatures = @(
     [PSCustomObject]@{
         Name = "Doomsday Client"
         Code = @'
-    hier den mehrzeiligen obfuskierten Code-Ausschnitt von Doomsday Client einfügen
-    zweite Zeile des Codes
-    dritte Zeile des Codes
+    var16.append('D');
+               var16.append('o');
+               var16.append('o');
+               var16.append('m');
+               var16.append('s');
+               var16.append('D');
+               var16.append('a');
+               var16.append('y');
+
 '@
     }
-    # Weitere Signaturen hier ergänzen, z.B.:
-    # [PSCustomObject]@{
-    #     Name = "Anderer Client"
-    #     Code = @'
-    #     ... mehrzeiliger Code ...
-    #     '@
-    # }
+
+     
 )
 
 function Normalize-CodeBlock {
