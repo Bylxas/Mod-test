@@ -296,7 +296,7 @@ function Get-FileSHA1 {
 # Bekannte Cheat-Client-Hashes: SHA1 (JAR-Gesamthash) -> Anzeigename
 $knownCheatHashes = @{
     "67346368972ABCDEF1234567890ABCDEF123456" = "Dqrkis Client"
-    "AB12CD34EF56789012345678901234567890ABCD" = "Meteor (custom build)"
+    "647caeafcce5ae6898905ba45b18c677f9f02450" = "Meteor (custom build)"
     "1122334455667788990011223344556677889900" = "Impact Client"
     "FFEEDDCCBBAA00998877665544332211FFEEDDCC" = "LiquidBounce"
 }
